@@ -9,7 +9,7 @@ import "codemirror/lib/codemirror.css";
 import "codemirror/theme/material.css";
 
 import "codemirror/mode/htmlmixed/htmlmixed";
-import "codemirror/mode/css/css.js";
+import "codemirror/mode/css/css";
 import "codemirror/mode/javascript/javascript";
 
 class App extends Component {
@@ -21,6 +21,13 @@ class App extends Component {
       css: "",
       js: "",
     };
+
+    this.pusher = new Pusher("18160601861a89d7f8f7", {
+      cluster: "eu",
+      forceTLS: true,
+    });
+
+    this.channel = this.pusher.subscribe("editor");
   }
 
   componentDidUpdate() {
@@ -31,7 +38,26 @@ class App extends Component {
     this.setState({
       id: pushid(),
     });
+
+    this.channel.bind("text-update", (data) => {
+      const { id } = this.state;
+      if (data.id === id) return;
+
+      this.setState({
+        html: data.html,
+        css: data.css,
+        js: data.js,
+      });
+    });
   }
+
+  syncUpdates = () => {
+    const data = { ...this.state };
+
+    axios
+      .post("http://localhost:5000/update-editor", data)
+      .catch(console.error);
+  };
 
   runCode = () => {
     const { html, css, js } = this.state;
@@ -52,7 +78,6 @@ class App extends Component {
       </head>
       <body>
         ${html}
-
         <script type="text/javascript">
           ${js}
         </script>
@@ -86,7 +111,7 @@ class App extends Component {
                 ...codeMirrorOptions,
               }}
               onBeforeChange={(editor, data, html) => {
-                this.setState({ html });
+                this.setState({ html }, () => this.syncUpdates());
               }}
             />
           </div>
@@ -99,7 +124,7 @@ class App extends Component {
                 ...codeMirrorOptions,
               }}
               onBeforeChange={(editor, data, css) => {
-                this.setState({ css });
+                this.setState({ css }, () => this.syncUpdates());
               }}
             />
           </div>
@@ -112,7 +137,7 @@ class App extends Component {
                 ...codeMirrorOptions,
               }}
               onBeforeChange={(editor, data, js) => {
-                this.setState({ js });
+                this.setState({ js }, () => this.syncUpdates());
               }}
             />
           </div>
